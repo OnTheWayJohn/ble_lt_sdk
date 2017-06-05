@@ -19,8 +19,11 @@
 
 #define   I2C_WAIT  sleep_us(4);
 
-#define WC24C04_1 0xa0
-#define RC24C04_1 0Xa1
+#define WC24C04_1 0x5c
+#define RC24C04_1 0x5d
+
+//#define WC24C04_1 0xa0
+//#define RC24C04_1 0Xa1
 
 #define WC24C04_2 0xa2
 #define RC24C04_2 0Xa3
@@ -191,7 +194,7 @@ unsigned  char   i2c_read_byte()
 }
 
 
-bool I2C_ByteWrite(u8* pBuffer, u16 WAddr)
+bool I2C_ByteWrite(u8 pBuffer, u16 WAddr)
 	{
 	u8 WC24C04=0;
 	u8 WriteAddr=0;
@@ -211,14 +214,14 @@ bool I2C_ByteWrite(u8* pBuffer, u16 WAddr)
 	if(I2CWaitAck()==0)return false;
 	i2c_write_byte(WriteAddr);
 	if(I2CWaitAck() ==0)return false;
-	i2c_write_byte(*pBuffer);
+	i2c_write_byte(pBuffer);
 	//i2c_write_byte(0x55);
 	if(I2CWaitAck()==0) return false;
 	i2c_stop();
 	return true;
 	}
 
-bool I2C_PageWrite(u16* pBuffer, u16 WAddr, u8 n)
+bool I2C_PageWrite(u16 pBuffer, u16 WAddr, u8 n)
 {
 	u8 i;
 	u8 data=0;
@@ -246,10 +249,10 @@ bool I2C_PageWrite(u16* pBuffer, u16 WAddr, u8 n)
 	if(I2CWaitAck() == 0)    return false;
 	for(i = 0; i < n; i++)//写入8字节数据
 		{
-		data=(u8)(*pBuffer>>8);
+		data=(u8)(pBuffer>>8);
 		i2c_write_byte(data);
 		if(I2CWaitAck() == 0)return false;
-		data=(u8)(*pBuffer);
+		data=(u8)(pBuffer);
 		i2c_write_byte(data);
 		if(I2CWaitAck() == 0)return false;
 		pBuffer++;
@@ -259,7 +262,7 @@ bool I2C_PageWrite(u16* pBuffer, u16 WAddr, u8 n)
 	return true;
 }
 
-bool I2C_BufferRead(u16* pBuffer, u16 RAddr, u16 n)
+bool I2C_BufferRead(u16* pBuffer, u16 RAddr, u16 n )
 {
 	u8 i;
 	u8 data0=0;
@@ -268,24 +271,31 @@ bool I2C_BufferRead(u16* pBuffer, u16 RAddr, u16 n)
 	u8 WC24C04=0;
 	u8 RC24C04=0;
 
-	if(RAddr>255)
-		{
-		 ReadAddr=(u8)(RAddr-256);
-		 WC24C04= WC24C04_2;
-		 RC24C04=RC24C04_2;
-		}
-	else
-		{
-		 ReadAddr=(u8)RAddr;
+//	if(RAddr>255)
+//		{
+//	 	 ReadAddr=RAddr;
+//	 	 ReadAddr=(u8)(RAddr-256);
+//		 WC24C04= WC24C04_2;
+//		 RC24C04=RC24C04_2;
+//		}
+//	else
+//		{
+//		 ReadAddr=(u8)RAddr;
 		 WC24C04= WC24C04_1;
 		 RC24C04=RC24C04_1;
-		}
+//		}
 
 	i2c_start();//启动I2C
 	i2c_write_byte(WC24C04);//发送器件地址 写
 	if(I2CWaitAck() == 0)    return false;
-	i2c_write_byte(ReadAddr);//发送器件内部地址
-	if(I2CWaitAck() == 0)return false;
+	if(RAddr>256)
+	{
+		i2c_write_byte(RAddr>>8);//发送器件内部地址
+		if(I2CWaitAck() == 0)return false;
+	}
+	i2c_write_byte((u8)RAddr);//发送器件地址 写
+	if(I2CWaitAck() == 0)    return false;
+
 	i2c_start();
 	i2c_write_byte(RC24C04); //发送器件地址 读
 	if(I2CWaitAck() == 0)return false;
@@ -309,4 +319,3 @@ bool I2C_BufferRead(u16* pBuffer, u16 RAddr, u16 n)
 	i2c_stop();
 	return true;
 }
-

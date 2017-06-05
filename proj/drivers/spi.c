@@ -6,6 +6,7 @@
 ///////////////  SPI master driver /////////////////////////////
 void spi_select(int i){
 	reg_spi_ctrl = FLD_SPI_MASTER_MODE_EN;
+//	reg_spi_ctrl = FLD_SPI_CS | FLD_SPI_MASTER_MODE_EN;
 }
 
 void spi_no_select(int i){
@@ -17,7 +18,7 @@ static inline void spi_wait () {
 }
 
 void spi_init (int divider, int mode) {
-	reg_spi_ctrl = FLD_SPI_MASTER_MODE_EN;
+	reg_spi_ctrl = FLD_SPI_MASTER_MODE_EN ;
 	reg_spi_sp = FLD_SPI_ENABLE | divider;		//force PADs act as spi
 
 }
@@ -32,19 +33,20 @@ int spi_read_write (u8 * buff_w, u8 * buff_r, int len) {
 	return len;
 }
 
-void spi_write(u8 d){
-	//reg_spi_ctrl = reg_spi_ctrl || 0xFF;
+void spi_write(u8 d,u8 ncs){
+	reg_spi_ctrl = FLD_SPI_MASTER_MODE_EN;  //frank
 	reg_spi_data = d;
 	spi_wait();
-	//reg_spi_ctrl = reg_spi_ctrl && 0xFE;
+    if(ncs)	reg_spi_ctrl = FLD_SPI_MASTER_MODE_EN | FLD_SPI_CS ;   //frank  cs=1
 }
 
-u8 spi_read(){
+u8 spi_read(u8 ncs){
+	reg_spi_ctrl =FLD_SPI_MASTER_MODE_EN;//add by jxq
 	reg_spi_data = 0;
 	spi_wait();
-	reg_spi_ctrl = reg_spi_ctrl | FLD_SPI_RD;//add by jxq
+
 	u8 d = reg_spi_data;
-	reg_spi_ctrl = reg_spi_ctrl & ~FLD_SPI_RD;//add by jxq
+	if(ncs) reg_spi_ctrl = FLD_SPI_MASTER_MODE_EN | FLD_SPI_CS;//add by jxq
 	return d;
 }
 

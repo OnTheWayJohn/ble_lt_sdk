@@ -9,10 +9,18 @@
 
 #if (__PROJECT_8261_BLE_REMOTE__ || __PROJECT_8266_BLE_REMOTE__ || __PROJECT_8267_BLE_REMOTE__ || __PROJECT_8269_BLE_REMOTE__)
 
-unsigned char byte1 = 0x00;
-unsigned char byte2 = 0x00;
-unsigned char byte3 = 0x00;
-char run_here = 0;
+
+#define PIN_I2C_INT				GPIO_PC4
+//unsigned char byte1 = 0x00;
+//unsigned char byte2 = 0x00;
+//unsigned char byte3 = 0x00;
+//char run_here = 0;
+u16* pPage;
+bool read_I2C_ok;
+u8 john_debug,i;
+
+bool i2c_ready=false;
+u8 spi_WIP=1;
 
 extern void user_init();
 extern void main_loop (void);
@@ -37,75 +45,20 @@ _attribute_ram_code_ void irq_handler(void)
 
 }
 
-#define WC24C04_1 0xa0
-#define RC24C04_1 0Xa1
-
-#define WC24C04_2 0xa2
-#define RC24C04_2 0Xa3
 
 
 
-char john_debug = 0;
-char john_debug2 = 0;
+
 int main (void) {
-	char init_value = 0;
-	char sda_value = 0;
-	char clk_value = 0;
-	unsigned  char  dat,i,x;
+
 	cpu_wakeup_init();
 
-	set_tick_per_us (CLOCK_SYS_CLOCK_HZ/1000000);
+	set_tick_per_us (CLOCK_SYS_CLOCK_HZ/1000000);  //1us=1000000
 	clock_init();
 
 	gpio_init();
 
-/*
-	gpio_set_func(GPIO_PC2, AS_GPIO);
-	gpio_set_input_en(GPIO_PC2,0);
-	gpio_set_output_en(GPIO_PC2,1);
 
-	gpio_set_func(GPIO_PC6, AS_GPIO);
-	gpio_set_input_en(GPIO_PC6,0);
-	gpio_set_output_en(GPIO_PC6,1);
-
-	gpio_set_func(GPIO_PC7, AS_GPIO);
-	gpio_set_input_en(GPIO_PC7,0);
-	gpio_set_output_en(GPIO_PC7,1);
-	i2c_write_bit(1);
-	while (1) {
-		gpio_write (GPIO_PC7,1);
-		i2c_write_byte(0x5C);
-		i2c_write_byte(0xAF);
-		i2c_write_byte(0x48);
-		gpio_write (GPIO_PC7,0);
-		sleep_us(1000);
-
-	}
-*/
-	/*gpio_set_func(GPIO_PC2, AS_GPIO);
-	gpio_set_input_en(GPIO_PC2,1);
-	gpio_set_output_en(GPIO_PC2,0);
-
-	gpio_set_func(GPIO_PC6, AS_GPIO);
-	gpio_set_input_en(GPIO_PC6,1);
-	gpio_set_output_en(GPIO_PC6,0);
-
-	gpio_set_func(GPIO_PC7, AS_GPIO);
-	gpio_set_input_en(GPIO_PC7,1);
-	gpio_set_output_en(GPIO_PC7,0);
-
-	gpio_set_func(GPIO_PC4, AS_GPIO);
-	gpio_set_input_en(GPIO_PC4,0);
-	gpio_set_output_en(GPIO_PC4,1);
-
-	gpio_set_func(GPIO_PC1, AS_GPIO);
-	gpio_set_input_en(GPIO_PC1,0);
-	gpio_set_output_en(GPIO_PC1,1);
-
-	gpio_set_func(GPIO_PA1, AS_GPIO);
-	gpio_set_input_en(GPIO_PA1,0);
-	gpio_set_output_en(GPIO_PA1,1);*/
-/*
 	gpio_set_func(GPIO_PF0, AS_SPI); //SO
 	gpio_set_input_en(GPIO_PF0,0);
 	gpio_set_output_en(GPIO_PF0,1);
@@ -120,62 +73,126 @@ int main (void) {
 
 	gpio_set_func(GPIO_PE6, AS_SPI);   //cs
 	gpio_set_input_en(GPIO_PE6,0);
-	gpio_set_output_en(GPIO_PE6,1);*/ //for SPI
+	gpio_set_output_en(GPIO_PE6,1); //for SPI
 
-	//spi_init(16,0);					//for SPI
+//	gpio_write(GPIO_PC4, 1);
+	gpio_set_func(GPIO_PC4, AS_GPIO);
+	gpio_set_output_en(GPIO_PC4, 0);
+	gpio_set_input_en(GPIO_PC4,1);
 
+	gpio_write(GPIO_PC7, 1);
+	gpio_set_func(GPIO_PC7, AS_GPIO);
+	gpio_set_output_en(GPIO_PC7, 1);
+	gpio_set_input_en(GPIO_PC7,0);
+
+	spi_init(16,0);					//for SPI
 	kb_i2c_sim_init();
-	I2C_ByteWrite(0x44, 0x00);
-	I2C_ByteWrite(0x55, 0x01);
-	I2C_ByteWrite(0x66, 0x02);
+//	sleep_us(10000) ;
+
+//SPI initial command
+//		spi_write(data,ncs), data 1 byte, ncs: chip select 0 or 1;
+		spi_write(0x06,1);  //spi_write(data,ncs)
+
+
+
+// Flash Sector Erase
+		spi_write(0x20,0);  //command erase sector
+		spi_write(00,0); //spi_write(address23-16,ncs)
+		spi_write(0,0);  //spi_write(address15-7,ncs)
+		spi_write(0,1);  //spi_write(address7-0,ncs)
+
+		gpio_write(GPIO_PC7, spi_WIP);   //debug pin to check the WIP status
+		while (spi_WIP)
+		{
+		  spi_write(0x05,0);  //command erase sector
+		  john_debug=spi_read(1);
+		  if(john_debug & 0x01) spi_WIP=1;
+		  else spi_WIP=0;
+		  gpio_write(GPIO_PC7, spi_WIP);  //debug pin to check the WIP status
+		}
+
+
+//SPI write 1 byte data to a 24 bit address
+
+		spi_write(0x06,1);  //spi_write(data,ncs)
+
+		spi_write(0x02,0);  //spi_write(data,ncs)   //command datasheet
+		spi_write(00,0);    //spi_write(data,ncs)     //address bit23-bit16
+		spi_write(00,0);    //spi_write(data,ncs)     //address bit15-bit8
+		spi_write(0,0);     //spi_write(data,ncs)     //address bit15-bit8
+		for (i=0;i<254;i++)
+		   {
+			spi_write(i,0);  //spi_write(data,ncs)      //address bit7-bit0
+
+		   }
+			spi_write(0xee,1);
+		sleep_us(1000) ;
+
+//I2C initial data
+//		for (i=0;i<256;i++)    //write data to EEPROM
+//		{
+	  //I2C_ByteWrite(u8 pBuffer, u16 WAddr)
+//		I2C_ByteWrite(i,i);
+//		sleep_us(1000);
+//		}
+
+
 	while (1)
 	{
-		/*init_value = gpio_read(PIN_INIT);
-		gpio_write(GPIO_PC4, init_value);
 
-		sda_value = gpio_read(GPIO_PC2);
-		gpio_write(GPIO_PC1, sda_value);
+   //     while (~PIN_I2C_INT)
+    //    {
 
-		clk_value = gpio_read(GPIO_PC6);
-		gpio_write(GPIO_PA1, clk_value);*/
+//        }
 
-		//sleep_us(50);
-		/*if (init_value == 1) {
-			gpio_write(GPIO_PC4, 0);
-			byte1 = i2c_read_byte();
-			run_here = 3;
-			//byte2 = i2c_read_byte();
-			run_here = 4;
-			//byte3 = i2c_read_byte();
-			//If there is no data coming next, should break;
-		}*/
-		//spi_slave_init(0,NULL);
-		//spi_write(0x0F);
-		//spi_write(0x01);
-		//spi_write(0x13);
-		//spi_write(0x00);
-		//spi_write(0x00);
-		//spi_write(0x00);
-		//sleep_us(1);
-		//spi_write(0x0F);
-		//spi_write(0x00);
-		//spi_write(0x05);
-		//john_debug=spi_read();
-		//spi_write(0x35);
-		//john_debug2=spi_read();
-		//reg_spi_data = 0x85;
-		//john_debug = reg_spi_data;
-		//sleep_us(10);
-	//	spi_write(0x59);
-		//I2C_ByteWrite(0xA0,0);
-		//i2c_write_byte(0x00);
-		//i2c_write_byte(0xA1);
-		u16 read_data =0;
-		sda_value = I2C_BufferRead(&read_data, 0, 1);
-		sda_value = I2C_BufferRead(&read_data, 1, 1);
-		sda_value = I2C_BufferRead(&read_data, 2, 1);
+//I2C application
+//I2C write data byt
+   	   //I2C_ByteWrite(u8 pBuffer, u16 WAddr)
+//		 I2C_ByteWrite(0x48,0xAF);
+//		 I2C_ByteWrite(0x48,0x5c);
+//		 I2C_PageWrite(0xAF48,0x5c,2);
+//    	gpio_write(GPIO_PC7, PIN_I2C_INT);
+
+//Use interrupt function to detect the GPIO_PC4.
+		i2c_ready=gpio_read(GPIO_PC4);
+		i2c_ready=true;
+//I2C read data bytes
+		if(i2c_ready)
+		{
+//			read_I2C_ok=I2C_BufferRead(&pPage, 0xAF48, 4);  //"4" read 8 byte data/
+
+
+
+//SPI read 3 byte data from 24 bits address;
+//		spi_write(data,ncs), data 1 byte, ncs: chip select 0 or 1;
+		spi_write(0x03,0);  //spi_write(data,ncs)
+		spi_write(00,0);    //spi_write(address23-16,ncs)
+		spi_write(00,0);    //spi_write(address15-7,ncs)
+		spi_write(0,0);     //spi_write(address7-0,ncs)
+
+		for (i=0;i<254;i++)
+		 {
+		   john_debug=spi_read(0);   //spi_read(ncs);
+		 }
+		 john_debug=spi_read(1);   //spi_read(ncs);
+
 		sleep_us(100);
+
+//SPI write 1 byte data to a 24 bit address
+/*		spi_write(0x02,0);  //spi_write(data,ncs)   //command datasheet
+		spi_write(23,0);  //spi_write(data,ncs)     //address bit23-bit16
+		spi_write(15,0);  //spi_write(data,ncs)     //address bit15-bit8
+		spi_write(7,0);  //spi_write(data,ncs)      //address bit7-bit0
+		spi_write(0x35,1);
+*/
+		sleep_us(100);
+		i2c_ready=false;
+		}
+
+
+
 	}
+
 	while (1)
 	{
 		sleep_us(100);
